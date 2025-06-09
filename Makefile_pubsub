@@ -1,0 +1,85 @@
+# Makefile for publish-subscribe ringbuffer
+
+CC = gcc
+CFLAGS = -Wall -O2 -g -pthread
+LDFLAGS = -pthread
+
+# Default memory ordering mode (0: relaxed, 1: acquire-release, 2: sequential)
+MEMORY_ORDER ?= 1
+
+# Add memory ordering definition
+CFLAGS += -DPSR_MEMORY_ORDER_MODE=$(MEMORY_ORDER)
+
+# Target executables
+TARGETS = test_pubsub test_pubsub_relaxed test_pubsub_seq perf_test example_usage
+
+# Source files
+SRCS = pubsub_ringbuffer.c
+HDRS = pubsub_ringbuffer.h
+
+all: $(TARGETS)
+
+# Default build with acquire-release ordering
+test_pubsub: test_pubsub.c $(SRCS) $(HDRS)
+	$(CC) $(CFLAGS) -DPSR_MEMORY_ORDER_MODE=1 -o $@ test_pubsub.c $(SRCS) $(LDFLAGS)
+
+# Build with relaxed ordering for single reader/writer scenarios
+test_pubsub_relaxed: test_pubsub.c $(SRCS) $(HDRS)
+	$(CC) $(CFLAGS) -DPSR_MEMORY_ORDER_MODE=0 -o $@ test_pubsub.c $(SRCS) $(LDFLAGS)
+
+# Build with sequential consistency for maximum safety
+test_pubsub_seq: test_pubsub.c $(SRCS) $(HDRS)
+	$(CC) $(CFLAGS) -DPSR_MEMORY_ORDER_MODE=2 -o $@ test_pubsub.c $(SRCS) $(LDFLAGS)
+
+# Build shared library
+libpubsub.so: $(SRCS) $(HDRS)
+	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(SRCS)
+
+# Build static library
+libpubsub.a: pubsub_ringbuffer.o
+	ar rcs $@ $^
+
+pubsub_ringbuffer.o: pubsub_ringbuffer.c $(HDRS)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+# Performance test
+perf_test: perf_test.c $(SRCS) $(HDRS)
+	$(CC) $(CFLAGS) -O3 -o $@ perf_test.c $(SRCS) $(LDFLAGS)
+
+# Example usage
+example_usage: example_usage.c $(SRCS) $(HDRS)
+	$(CC) $(CFLAGS) -o $@ example_usage.c $(SRCS) $(LDFLAGS)
+
+clean:
+	rm -f $(TARGETS) *.o *.so *.a
+	rm -f /tmp/psr_fifo_*
+
+# Remove shared memory segments
+clean_shm:
+	@echo "Removing shared memory segments..."
+	@ipcs -m | grep 0x12345678 | awk '{print $$2}' | xargs -r ipcrm -m || true
+	@ipcs -m | grep 0x87654321 | awk '{print $$2}' | xargs -r ipcrm -m || true
+	@ipcs -m | grep 0xABCDEF00 | awk '{print $$2}' | xargs -r ipcrm -m || true
+
+# Run basic test
+test: test_pubsub
+	./test_pubsub 2 3
+
+# Run example
+example: example_usage
+	./example_usage
+
+# Run performance test
+perf: perf_test
+	./perf_test
+
+# Run performance comparison
+benchmark: all
+	@echo "=== Relaxed Memory Ordering ==="
+	./test_pubsub_relaxed 4 4
+	@echo "\n=== Acquire-Release Memory Ordering ==="
+	./test_pubsub 4 4
+	@echo "\n=== Sequential Consistency ==="
+	./test_pubsub_seq 4 4
+
+.PHONY: all clean clean_shm test example perf benchmark
