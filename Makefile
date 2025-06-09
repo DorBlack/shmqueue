@@ -1,10 +1,40 @@
-all: lib test
+# Makefile for Publish-Subscribe Ring Buffer
 
-lib: shm_queue.c shm_queue.h opt_time.h
-	gcc -o libshmqueue.so shm_queue.c -shared -fPIC
+CC = gcc
+CFLAGS = -Wall -O2 -g
+LDFLAGS = -lpthread -lrt
 
-test: lib test.c shm_queue.h
-	gcc -o test test.c -L./ -lshmqueue -g
+# Targets
+TARGETS = pubsub_publisher pubsub_subscriber test_pubsub
 
+# Source files
+PUBSUB_OBJS = pubsub_ringbuffer.o
+
+all: $(TARGETS)
+
+# Publisher
+pubsub_publisher: pubsub_publisher.o $(PUBSUB_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+# Subscriber
+pubsub_subscriber: pubsub_subscriber.o $(PUBSUB_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+# Test program
+test_pubsub: test_pubsub.o $(PUBSUB_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+# Object files
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Clean
 clean:
-	rm -f test libshmqueue.so
+	rm -f *.o $(TARGETS)
+
+# Install (optional)
+install: $(TARGETS)
+	@echo "Installing to /usr/local/bin..."
+	@cp $(TARGETS) /usr/local/bin/ 2>/dev/null || echo "Install failed. Try 'sudo make install'"
+
+.PHONY: all clean install
