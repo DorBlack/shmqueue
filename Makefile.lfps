@@ -1,0 +1,114 @@
+# Makefile for Lock-free Publish-Subscribe System
+# Usage:
+#   make -f Makefile.lfps MODE=SPSC    # Single Producer Single Consumer
+#   make -f Makefile.lfps MODE=MPSC    # Multiple Producer Single Consumer
+#   make -f Makefile.lfps MODE=SPMC    # Single Producer Multiple Consumer
+#   make -f Makefile.lfps MODE=MPMC    # Multiple Producer Multiple Consumer (default)
+
+CC = gcc
+CFLAGS = -Wall -O3 -g -std=c99 -D_GNU_SOURCE
+LDFLAGS = -lpthread -lrt
+
+# Default mode
+MODE ?= MPMC
+
+# Add mode-specific define
+ifeq ($(MODE),SPSC)
+    CFLAGS += -DLFPS_MODE_SPSC
+    MODE_DESC = "Single Producer Single Consumer"
+else ifeq ($(MODE),MPSC)
+    CFLAGS += -DLFPS_MODE_MPSC
+    MODE_DESC = "Multiple Producer Single Consumer"
+else ifeq ($(MODE),SPMC)
+    CFLAGS += -DLFPS_MODE_SPMC
+    MODE_DESC = "Single Producer Multiple Consumer"
+else
+    CFLAGS += -DLFPS_MODE_MPMC
+    MODE_DESC = "Multiple Producer Multiple Consumer"
+endif
+
+# Targets
+TARGETS = lfps_publisher_demo lfps_subscriber_select lfps_benchmark
+
+# Object files
+OBJS = lockfree_pubsub.o
+
+# Build info
+$(info Building Lock-free Publish-Subscribe System)
+$(info Mode: $(MODE) - $(MODE_DESC))
+$(info )
+
+all: $(TARGETS)
+
+# Publisher demo
+lfps_publisher_demo: lfps_publisher_demo.o $(OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+# Subscriber with select
+lfps_subscriber_select: lfps_subscriber_select.o $(OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+# Benchmark
+lfps_benchmark: lfps_benchmark.o $(OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+# Object files
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Clean
+clean:
+	rm -f *.o $(TARGETS)
+	rm -f lfps_*_spsc lfps_*_mpsc lfps_*_spmc lfps_*_mpmc
+
+# Build all modes
+all-modes:
+	@echo "Building all modes..."
+	@$(MAKE) -f Makefile.lfps clean
+	@$(MAKE) -f Makefile.lfps MODE=SPSC
+	@for target in $(TARGETS); do mv $$target $${target}_spsc; done
+	@$(MAKE) -f Makefile.lfps clean
+	@$(MAKE) -f Makefile.lfps MODE=MPSC
+	@for target in $(TARGETS); do mv $$target $${target}_mpsc; done
+	@$(MAKE) -f Makefile.lfps clean
+	@$(MAKE) -f Makefile.lfps MODE=SPMC
+	@for target in $(TARGETS); do mv $$target $${target}_spmc; done
+	@$(MAKE) -f Makefile.lfps clean
+	@$(MAKE) -f Makefile.lfps MODE=MPMC
+	@for target in $(TARGETS); do mv $$target $${target}_mpmc; done
+	@$(MAKE) -f Makefile.lfps clean
+	@echo "Done! Built binaries for all modes:"
+	@ls -la lfps_*_spsc lfps_*_mpsc lfps_*_spmc lfps_*_mpmc
+
+# Performance test
+perf-test: lfps_benchmark
+	@echo "Running performance test in $(MODE) mode..."
+	./lfps_benchmark 1 1 256
+
+# Help
+help:
+	@echo "Lock-free Publish-Subscribe System Makefile"
+	@echo "==========================================="
+	@echo ""
+	@echo "Usage:"
+	@echo "  make -f Makefile.lfps [MODE=mode] [target]"
+	@echo ""
+	@echo "Modes:"
+	@echo "  SPSC - Single Producer Single Consumer (fastest)"
+	@echo "  MPSC - Multiple Producer Single Consumer"
+	@echo "  SPMC - Single Producer Multiple Consumer"
+	@echo "  MPMC - Multiple Producer Multiple Consumer (default, most flexible)"
+	@echo ""
+	@echo "Targets:"
+	@echo "  all        - Build all programs for specified mode (default)"
+	@echo "  all-modes  - Build all programs for all modes"
+	@echo "  clean      - Remove all built files"
+	@echo "  perf-test  - Run performance test"
+	@echo "  help       - Show this help"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make -f Makefile.lfps MODE=SPSC     # Build for SPSC mode"
+	@echo "  make -f Makefile.lfps all-modes     # Build for all modes"
+	@echo "  make -f Makefile.lfps perf-test     # Run performance test"
+
+.PHONY: all clean all-modes perf-test help
